@@ -8,10 +8,22 @@ const envSchema = z.object({
   MONGODB_URI: z.string().min(1).default("mongodb://127.0.0.1:27017"),
   MONGODB_DATABASE: z.string().min(1).default("bika_anime"),
   ADMIN_USER_IDS: z.string().default(""),
-  MAIN_CHANNEL_URL: z.string().url().optional(),
-  TELEGRAM_API_ID: z.coerce.number().int().positive().optional(),
-  TELEGRAM_API_HASH: z.string().optional(),
-  TELEGRAM_USER_SESSION: z.string().optional(),
+  MAIN_CHANNEL_URL: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().url().optional()
+  ),
+  TELEGRAM_API_ID: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.coerce.number().int().positive().optional()
+  ),
+  TELEGRAM_API_HASH: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().optional()
+  ),
+  TELEGRAM_USER_SESSION: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().optional()
+  ),
   IMPORT_BATCH_SIZE: z.coerce.number().int().min(1).max(1000).default(100),
   IMPORT_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(2).default(1),
   DELETE_DELAY_SECONDS: z.coerce.number().int().min(60).max(3600).default(300),
