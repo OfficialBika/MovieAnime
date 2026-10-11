@@ -37,7 +37,7 @@ bot.command("start",async ctx=>{
 bot.command("startfw",async ctx=>{
  if(!ctx.from||!admins.has(ctx.from.id)){await ctx.reply("Auto-forward ဖွင့်ရန် Admin သာ အသုံးပြုနိုင်ပါသည်。");return;}
  const args=(ctx.match??"").trim();
- const match=args.match(/^(-100[0-9]+)\\s+(-100[0-9]+)\\s+([\\s\\S]+)$/);
+ const match=args.match(/^(-100[0-9]+)\s+(-100[0-9]+)\s+([\s\S]+)$/);
  if(!match){
   await ctx.reply("အသုံးပြုပုံ:\n/startfw SOURCE_CHANNEL_ID DESTINATION_PRIVATE_CHANNEL_ID Anime Name\nဥပမာ:\n/startfw -1002484587849 -1004421847808 နွားကျောင်းသား");
   return;
