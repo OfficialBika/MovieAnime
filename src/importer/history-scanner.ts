@@ -2,6 +2,7 @@ import { Api } from "teleproto";
 import type { TelegramClient } from "teleproto";
 import type { Db, Document } from "mongodb";
 import { parseSourceMessage } from "../parser/episode-parser.js";
+import { classifyTeleprotoMedia } from "./media-classifier.js";
 import { logger } from "../shared/logger.js";
 interface ImportOptions { client:TelegramClient; db:Db; channelId:string; batchSize:number; signal?:AbortSignal; }
 interface StringDoc extends Document { _id:string; }
@@ -25,12 +26,12 @@ export async function scanChannelHistory({client,db,channelId,batchSize,signal}:
    const page=await client.getMessages(channel,{limit:batchSize,...(cursor!==undefined?{maxId:cursor}:{})});if(!page.length)break;
    for(const message of page){
     if(signal?.aborted)throw new Error("Import aborted");
-    const hasMedia=Boolean(message.media);
-    const parsed=parseSourceMessage({channelId,messageId:message.id,text:message.message??"",hasMedia,...(hasMedia?{mediaType:"other" as const}:{})});
+    const mediaType=classifyTeleprotoMedia(message.media);
+    const parsed=parseSourceMessage({channelId,messageId:message.id,text:message.message??"",hasMedia:mediaType!==undefined,...(mediaType?{mediaType}:{})});
     if(parsed.status==="valid"){
      const animeId=String(channelDoc._id),episodeId=`${animeId}:${parsed.value.episodeNumber}`;
      await episodes.updateOne({_id:episodeId},{$setOnInsert:{_id:episodeId,animeId,episodeNumber:parsed.value.episodeNumber,createdAt:new Date()},$set:{updatedAt:new Date()}},{upsert:true});
-     await media.updateOne({sourceChannelId:channelId,sourceMessageId:message.id},{$set:{_id:`${channelId}:${message.id}`,episodeId,resolution:parsed.value.resolution??"UNKNOWN",sourceChannelId:channelId,sourceMessageId:message.id,mediaType:"other",available:true,indexedAt:new Date()}},{upsert:true});
+     await media.updateOne({sourceChannelId:channelId,sourceMessageId:message.id},{$set:{_id:`${channelId}:${message.id}`,episodeId,resolution:parsed.value.resolution??"UNKNOWN",sourceChannelId:channelId,sourceMessageId:message.id,mediaType:mediaType??"other",available:true,indexedAt:new Date()}},{upsert:true});
      await jobs.updateOne(jobFilter,{$inc:{scannedCount:1,indexedCount:1}});
     }else if(parsed.status==="review"){
      await reviews.updateOne({sourceChannelId:channelId,sourceMessageId:message.id},{$set:{sourceChannelId:channelId,sourceMessageId:message.id,reason:parsed.reason,text:parsed.normalizedTitle,updatedAt:new Date()}},{upsert:true});
