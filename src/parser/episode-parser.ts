@@ -16,8 +16,8 @@ function findEpisode(text:string):number|undefined {
 function extractName(text:string):string|undefined {
  const lines=text.split("\n").map(line=>line.trim()).filter(Boolean);
  for(const rawLine of lines){
-  if(/^media\s*\+/i.test(rawLine)||/soulkingdom\.net|https?:\/\/|www\./i.test(rawLine)||promoOnly.some(pattern=>pattern.test(rawLine)))continue;
-  const line=rawLine.replace(/\(\s*\d{1,5}\s*\)/g," ").replace(/\b(?:episode|ep)\s*[#.:_-]?\s*\d{1,5}\b/ig," ").replace(/\b(?:240|480|720|1080)\s*P\b/ig," ").replace(/\b(?:2K|4K)\b/ig," ").replace(/\s+/g," ").replace(/^[|:+–—\-\s]+|[|:+–—\-\s]+$/g,"").trim();
+  if(/^media\s*\+\s*$/i.test(rawLine)||/soulkingdom\.net|https?:\/\/|www\./i.test(rawLine)||promoOnly.some(pattern=>pattern.test(rawLine)))continue;
+  const line=rawLine.replace(/^media\s*\+\s*/i,"").replace(/\(\s*\d{1,5}\s*\)/g," ").replace(/\b(?:episode|ep)\s*[#.:_-]?\s*\d{1,5}\b/ig," ").replace(/\b(?:240|480|720|1080)\s*P\b/ig," ").replace(/\b(?:2K|4K)\b/ig," ").replace(/\s+/g," ").replace(/^[|:+–—\-\s]+|[|:+–—\-\s]+$/g,"").trim();
   if(line.length>=2&&/[a-zA-Z\u1000-\u109F]/.test(line))return line;
  }
  return undefined;
