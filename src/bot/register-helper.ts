@@ -232,7 +232,7 @@ export function registerHelperSystem(bot: Bot, db: Db, admins: ReadonlySet<numbe
 
     const forwardOrigin = message.forward_origin;
     if (forwardOrigin?.type === "channel") {
-      const sessionIdentity = await db.collection<Document>("system_settings").findOne({ _id: "telegram_user_session" });
+      const sessionIdentity = await db.collection<any>("system_settings").findOne({ _id: "telegram_user_session" });
       if (sessionIdentity && String(sessionIdentity.userId) === String(ctx.from.id)) {
         try {
           const result = await processAutoForwardMedia({
@@ -247,7 +247,7 @@ export function registerHelperSystem(bot: Bot, db: Db, admins: ReadonlySet<numbe
             mediaType
           });
           if (result.status === "route_not_found") {
-            await ctx.reply("ဒီ Source Channel အတွက် Auto-forward Route မရှိပါ။ Admin က /start SOURCE_ID DEST_ID ကို အသုံးပြုပါ။");
+            await ctx.reply("ဒီ Source Channel အတွက် Auto-forward Route မရှိပါ။ Admin က /startfw SOURCE_ID DEST_ID Anime Name ကို အသုံးပြုပါ။");
           } else if (result.status === "duplicate") {
             await ctx.reply("ဒီ Source post ကို အရင်က လုပ်ဆောင်ပြီးပါပြီ။");
           } else if (result.status === "review") {
