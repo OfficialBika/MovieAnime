@@ -19,12 +19,20 @@ soulkingdom.net
     }
   });
 
-  it("supports Burmese episode labels", () => {
+  it("supports Burmese episode labels and Arabic digits", () => {
     const result = parseEpisodeText("Renegade Immortal\nအပိုင်း - 103\n720P");
     expect(result.status).toBe("valid");
     if (result.status === "valid") {
       expect(result.value.episodeNumber).toBe(103);
       expect(result.value.resolution).toBe("720P");
+    }
+  });
+
+  it("normalizes an attached Myanmar numeral such as အပိုင်း၁ to episode 1", () => {
+    const result = parseEpisodeText("နွားကျောင်းသားလေးရဲ့ နတ်ဘုရားမှတ်တမ်း\nTales Of Herding God\nအပိုင်း၁\nSEC005");
+    expect(result.status).toBe("valid");
+    if (result.status === "valid") {
+      expect(result.value.episodeNumber).toBe(1);
     }
   });
 
