@@ -65,7 +65,7 @@ export function registerHelperSystem(bot: Bot, db: Db, admins: ReadonlySet<numbe
       await ctx.reply("အသုံးပြုပုံ: /removehelper 123456789");
       return;
     }
-    const result = await db.collection<Document>("helper_users").updateOne(
+    const result = await db.collection<HelperUserDocument>("helper_users").updateOne(
       { _id: String(userId) },
       { $set: { enabled: false, updatedAt: new Date() } }
     );
