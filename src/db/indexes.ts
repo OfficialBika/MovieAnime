@@ -25,4 +25,16 @@ export async function ensureIndexes(db: Db): Promise<void> {
   await db.collection("review_items").createIndex(
     { sourceChannelId: 1, sourceMessageId: 1 }, { unique: true, name: "uniq_review_source" }
   );
+  await db.collection("helper_routes").createIndex(
+    { targetChannelId: 1 }, { unique: true, name: "uniq_helper_target_channel" }
+  );
+  await db.collection("helper_users").createIndex(
+    { enabled: 1, userId: 1 }, { name: "helper_users_enabled" }
+  );
+  await db.collection("helper_review_items").createIndex(
+    { status: 1, updatedAt: 1 }, { name: "helper_review_status" }
+  );
+  await db.collection("helper_submissions").createIndex(
+    { status: 1, updatedAt: 1 }, { name: "helper_submission_status" }
+  );
 }
