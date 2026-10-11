@@ -1,4 +1,4 @@
-export const RESOLUTIONS = ["240P", "480P", "720P", "1080P", "2K", "4K", "UNKNOWN"] as const;
+export const RESOLUTIONS = ["240P", "360P", "480P", "540P", "720P", "1080P", "2K", "4K", "UNKNOWN"] as const;
 export type Resolution = (typeof RESOLUTIONS)[number];
 
 export interface ParsedEpisode {
