@@ -7,6 +7,7 @@ import { CatalogRepository } from "../db/repositories/catalog.js";
 import { logger } from "../shared/logger.js";
 import { animeKeyboard, episodeKeyboard, resolutionKeyboard } from "./keyboards/index.js";
 import { registerChannelIndexer } from "./register-indexer.js";
+import { registerHelperSystem } from "./register-helper.js";
 import { deliverMedia } from "../services/media-delivery.js";
 import type { Db } from "mongodb";
 import type { MediaVersionDocument } from "../shared/types.js";
@@ -16,6 +17,7 @@ const db=await connectDatabase(config);await ensureIndexes(db);
 const catalog=new CatalogRepository(db);
 const bot=new Bot(config.BOT_TOKEN,{client:{apiRoot:config.BOT_API_ROOT}});
 registerChannelIndexer(bot,db);
+registerHelperSystem(bot,db,admins);
 
 bot.catch(({error,ctx})=>{
  if(error instanceof GrammyError)logger.error("Telegram API error",{method:error.method,error:error.description,updateId:ctx.update.update_id});
