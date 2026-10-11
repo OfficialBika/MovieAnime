@@ -8,6 +8,7 @@ import { logger } from "../shared/logger.js";
 import { animeKeyboard, episodeKeyboard, resolutionKeyboard } from "./keyboards/index.js";
 import { registerChannelIndexer } from "./register-indexer.js";
 import { registerHelperSystem } from "./register-helper.js";
+import { registerAutoForwardInbox } from "./register-auto-forward.js";
 import { deliverMedia } from "../services/media-delivery.js";
 import type { Db } from "mongodb";
 import type { MediaVersionDocument } from "../shared/types.js";
@@ -17,6 +18,7 @@ const db=await connectDatabase(config);await ensureIndexes(db);
 const catalog=new CatalogRepository(db);
 const bot=new Bot(config.BOT_TOKEN,{client:{apiRoot:config.BOT_API_ROOT}});
 registerChannelIndexer(bot,db);
+registerAutoForwardInbox(bot,db);
 registerHelperSystem(bot,db,admins);
 
 bot.catch(({error,ctx})=>{
@@ -26,53 +28,57 @@ bot.catch(({error,ctx})=>{
 });
 
 bot.command("start",async ctx=>{
- const args=(ctx.match??"").trim();
- if(args){
-  if(!ctx.from||!admins.has(ctx.from.id)){await ctx.reply("Auto-forward Route သတ်မှတ်ရန် Admin သာ အသုံးပြုနိုင်ပါသည်။");return;}
-  const parts=args.split(/\s+/);
-  const sourceChannelId=parts[0]??"";
-  const targetChannelId=parts[1]??"";
-  if(parts.length!==2||!/^(-100[0-9]+)$/.test(sourceChannelId)||!/^(-100[0-9]+)$/.test(targetChannelId)){
-   await ctx.reply("အသုံးပြုပုံ:\n/start SOURCE_CHANNEL_ID DESTINATION_PRIVATE_CHANNEL_ID\nဥပမာ: /start -1002484587849 -1004421847808");
-   return;
-  }
-  try{
-   const destination=await ctx.api.getChat(targetChannelId);
-   if(destination.type!=="channel"){await ctx.reply("ဒုတိယ ID သည် Destination Channel ဖြစ်ရပါမည်။");return;}
-   const botInfo=await ctx.api.getMe();
-   const member=await ctx.api.getChatMember(targetChannelId,botInfo.id);
-   if(member.status!=="creator"&&member.status!=="administrator"){
-    await ctx.reply("Bot ကို ဒုတိယ Private Channel ထဲ Admin အဖြစ် ထည့်ပေးပါ။");return;
-   }
-   if(member.status==="administrator"&&!member.can_post_messages){
-    await ctx.reply("Destination Channel ထဲမှာ Bot ရဲ့ Post Messages ခွင့်ကို ဖွင့်ပေးပါ။");return;
-   }
-   const now=new Date();
-   await db.collection("auto_forward_routes").updateOne(
-    {_id:sourceChannelId},
-    {$set:{sourceChannelId,targetChannelId,enabled:true,updatedAt:now},
-     $setOnInsert:{createdAt:now}},
-    {upsert:true}
-   );
-   await ctx.reply(
-    "✅ Auto-forward Route သိမ်းပြီးပါပြီ။\n\n"+
-    "Source Channel: "+sourceChannelId+"\n"+
-    "Destination Private Channel: "+targetChannelId+"\n\n"+
-    "Session account က Source Channel ကို ဝင်ထားရပါမယ်။\n"+
-    "PM2 မှာ movieanime-forwarder process ကိုပါ run ထားပါ။\n"+
-    "Forwarder စောင့်ကြည့်ပြီးနောက် ရောက်လာမယ့် Video post အသစ်တွေကို Bot DM ကတစ်ဆင့် ပို့ပါမယ်။"
-   );
-  }catch(error){
-   logger.warn("Auto-forward route setup failed",{sourceChannelId,targetChannelId,error:error instanceof Error?error.message:String(error)});
-   await ctx.reply("Route မသတ်မှတ်နိုင်ပါ။ Destination ID၊ Bot Admin permission နဲ့ Channel ID ကို ပြန်စစ်ပါ။");
-  }
-  return;
- }
  const keyboard=[
   [{text:"ဇာတ်လမ်းများ",callback_data:"catalog"}],
   ...(config.MAIN_CHANNEL_URL?[[{text:"Main Channel",url:config.MAIN_CHANNEL_URL}]]:[])
  ];
  await ctx.reply("Anime ဇာတ်ကားပေါင်းစုံ ကြည့်ရန်\nကြည့်ရန် ဇာတ်လမ်းများကို အောက်ပါ Button မှ ရွေးချယ်ပါ။",{reply_markup:{inline_keyboard:keyboard}});
+});
+bot.command("startfw",async ctx=>{
+ if(!ctx.from||!admins.has(ctx.from.id)){await ctx.reply("Auto-forward ဖွင့်ရန် Admin သာ အသုံးပြုနိုင်ပါသည်。");return;}
+ const args=(ctx.match??"").trim();
+ const match=args.match(/^(-100[0-9]+)\\s+(-100[0-9]+)\\s+([\\s\\S]+)$/);
+ if(!match){
+  await ctx.reply("အသုံးပြုပုံ:\n/startfw SOURCE_CHANNEL_ID DESTINATION_PRIVATE_CHANNEL_ID Anime Name\nဥပမာ:\n/startfw -1002484587849 -1004421847808 နွားကျောင်းသား");
+  return;
+ }
+ const sourceChannelId=match[1]!;
+ const targetChannelId=match[2]!;
+ const animeTitle=match[3]!.trim();
+ if(!animeTitle||animeTitle.length>100){
+  await ctx.reply("Anime Name ကို စာလုံး 1 မှ 100 အတွင်း ထည့်ပါ။");
+  return;
+ }
+ try{
+  const destination=await ctx.api.getChat(targetChannelId);
+  if(destination.type!=="channel"){await ctx.reply("ဒုတိယ ID သည် Destination Private Channel ဖြစ်ရပါမည်။");return;}
+  const botInfo=await ctx.api.getMe();
+  const member=await ctx.api.getChatMember(targetChannelId,botInfo.id);
+  if(member.status!=="creator"&&member.status!=="administrator"){
+   await ctx.reply("Bot ကို ဒုတိယ Private Channel ထဲ Admin အဖြစ် ထည့်ပေးပါ။");return;
+  }
+  if(member.status==="administrator"&&!member.can_post_messages){
+   await ctx.reply("Destination Channel ထဲမှာ Bot ရဲ့ Post Messages ခွင့်ကို ဖွင့်ပေးပါ။");return;
+  }
+  const now=new Date();
+  await db.collection("auto_forward_routes").updateOne(
+   {_id:sourceChannelId},
+   {$set:{sourceChannelId,targetChannelId,animeTitle,enabled:true,lastProcessedMessageId:0,updatedAt:now},
+    $setOnInsert:{createdAt:now}},
+   {upsert:true}
+  );
+  await ctx.reply(
+   "✅ Session Auto-forward စတင်ရန် Route သိမ်းပြီးပါပြီ။\n\n"+
+   "Anime: "+animeTitle+"\n"+
+   "Source Channel: "+sourceChannelId+"\n"+
+   "Destination Private Channel: "+targetChannelId+"\n\n"+
+   "လုပ်ဆောင်ပုံ: Channel ရဲ့ ပထမဆုံး Post ကနေ နောက်ဆုံး Post အထိ အစဉ်လိုက် စစ်ပြီး Video များကိုသာ ပို့ပါမယ်။ ပြီးရင် Post အသစ်တွေကို ဆက်စောင့်ကြည့်ပါမယ်။\n"+
+   "လိုအပ်ချက်: Session account က Source Channel ကို ဝင်ထားရမယ်၊ PM2 မှာ movieanime-forwarder process run နေရမယ်။"
+  );
+ }catch(error){
+  logger.warn("Auto-forward route setup failed",{sourceChannelId,targetChannelId,animeTitle,error:error instanceof Error?error.message:String(error)});
+  await ctx.reply("Route မသတ်မှတ်နိုင်ပါ။ Destination ID၊ Bot Admin permission နဲ့ Channel ID ကို ပြန်စစ်ပါ။");
+ }
 });
 bot.callbackQuery("catalog",async ctx=>{
  const channels=await catalog.listEnabledChannels();await ctx.answerCallbackQuery();
@@ -153,7 +159,7 @@ bot.command("channels",async ctx=>{
 bot.command("forwards",async ctx=>{
  if(!ctx.from||!admins.has(ctx.from.id)){await ctx.reply("ဤ Command ကို Admin သာ အသုံးပြုနိုင်ပါသည်။");return;}
  const routes=await db.collection("auto_forward_routes").find({enabled:true}).sort({sourceChannelId:1}).toArray();
- await ctx.reply(routes.length?("အသုံးပြုနေသော Auto-forward Routes:\n"+routes.map(r=>"• "+String(r.sourceChannelId)+" → "+String(r.targetChannelId)).join("\n")):"Auto-forward Route မရှိသေးပါ။");
+ await ctx.reply(routes.length?("အသုံးပြုနေသော Auto-forward Routes:\n"+routes.map(r=>"• "+String(r.animeTitle??"Anime")+" | "+String(r.sourceChannelId)+" → "+String(r.targetChannelId)).join("\n")):"Auto-forward Route မရှိသေးပါ။");
 });
 bot.command("stopforward",async ctx=>{
  if(!ctx.from||!admins.has(ctx.from.id)){await ctx.reply("ဤ Command ကို Admin သာ အသုံးပြုနိုင်ပါသည်။");return;}
@@ -167,7 +173,7 @@ bot.command("stopforward",async ctx=>{
 });
 bot.command("admin",async ctx=>{
  if(!ctx.from||!admins.has(ctx.from.id)){await ctx.reply("ဤ Command ကို Admin သာ အသုံးပြုနိုင်ပါသည်။");return;}
- await ctx.reply("Admin Commands:\n/start SOURCE_ID DEST_ID — Session auto-forward route ဖွင့်မယ်\n/forwards — Auto-forward Route စာရင်း\n/stopforward SOURCE_ID — Route ပိတ်မယ်\n/addchannel -100... — Source Channel မှတ်ပုံတင်မယ်\n/channels — Channel စာရင်းကြည့်မယ်\n/addhelper USER_ID — Helper ဖွင့်မယ်\n/helpers — Helper စာရင်း\n/removehelper USER_ID — Helper ပိတ်မယ်\n/addroute Anime Name | -100... — Private Channel ချိတ်မယ်\n/routes — Route စာရင်း\n/helperreviews — Caption မပြည့်စုံသောစာရင်း\n/removeroute Anime Name — Route ပိတ်မယ်\n\nHelper များက Video ကို Bot Private Chat သို့ Caption ပါအောင် ပို့ပါ။");
+ await ctx.reply("Admin Commands:\n/startfw SOURCE_ID DEST_ID Anime Name — ပထမ Post မှ Video များ auto-forward လုပ်မယ်\n/start — Bot catalog ဖွင့်မယ်\n/forwards — Auto-forward Route စာရင်း\n/stopforward SOURCE_ID — Route ပိတ်မယ်\n/addchannel -100... — Source Channel မှတ်ပုံတင်မယ်\n/channels — Channel စာရင်းကြည့်မယ်\n/addhelper USER_ID — Helper ဖွင့်မယ်\n/helpers — Helper စာရင်း\n/removehelper USER_ID — Helper ပိတ်မယ်\n/addroute Anime Name | -100... — Private Channel ချိတ်မယ်\n/routes — Route စာရင်း\n/helperreviews — Caption မပြည့်စုံသောစာရင်း\n/removeroute Anime Name — Route ပိတ်မယ်\n\nHelper များက Video ကို Bot Private Chat သို့ Caption ပါအောင် ပို့ပါ။");
 });
 
 const shutdown=async(signal:string)=>{
