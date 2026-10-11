@@ -111,7 +111,7 @@ bot.command("channels",async ctx=>{
 });
 bot.command("admin",async ctx=>{
  if(!ctx.from||!admins.has(ctx.from.id)){await ctx.reply("ဤ Command ကို Admin သာ အသုံးပြုနိုင်ပါသည်။");return;}
- await ctx.reply("Admin Commands:\n/addchannel -100... — Source Channel မှတ်ပုံတင်မယ်\n/channels — Channel စာရင်းကြည့်မယ်\n/addhelper USER_ID — Helper ဖွင့်မယ်\n/helpers — Helper စာရင်း\n/removehelper USER_ID — Helper ပိတ်မယ်\n/addroute Anime Name | -100... — Private Channel ချိတ်မယ်\n/routes — Route စာရင်း\n/removeroute Anime Name — Route ပိတ်မယ်\n\nHelper များက Video ကို Bot Private Chat သို့ Caption ပါအောင် ပို့ပါ။");
+ await ctx.reply("Admin Commands:\n/addchannel -100... — Source Channel မှတ်ပုံတင်မယ်\n/channels — Channel စာရင်းကြည့်မယ်\n/addhelper USER_ID — Helper ဖွင့်မယ်\n/helpers — Helper စာရင်း\n/removehelper USER_ID — Helper ပိတ်မယ်\n/addroute Anime Name | -100... — Private Channel ချိတ်မယ်\n/routes — Route စာရင်း\n/helperreviews — Caption မပြည့်စုံသောစာရင်း\n/removeroute Anime Name — Route ပိတ်မယ်\n\nHelper များက Video ကို Bot Private Chat သို့ Caption ပါအောင် ပို့ပါ။");
 });
 
 const shutdown=async(signal:string)=>{
