@@ -5,6 +5,23 @@ import type { AppConfig } from "../config/env.js";
 import { classifyTeleprotoMedia } from "./media-classifier.js";
 import { logger } from "../shared/logger.js";
 
+function waitForPollInterval(milliseconds: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    const finish = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, milliseconds);
+    signal.addEventListener("abort", finish, { once: true });
+    if (signal.aborted) finish();
+  });
+}
+
 interface AutoForwardRoute extends Document {
   _id: string;
   sourceChannelId: string;
@@ -135,7 +152,7 @@ export async function runAutoForwardWorker(input: {
       }
     }
     if (!input.signal.aborted) {
-      await new Promise((resolve) => setTimeout(resolve, input.config.AUTO_FORWARD_POLL_INTERVAL_SECONDS * 1000));
+      await waitForPollInterval(input.config.AUTO_FORWARD_POLL_INTERVAL_SECONDS * 1000, input.signal);
     }
   }
 }

@@ -5,6 +5,7 @@ import { connectDatabase, closeDatabase } from "../db/client.js";
 import { ensureIndexes } from "../db/indexes.js";
 import { CatalogRepository } from "../db/repositories/catalog.js";
 import { logger } from "../shared/logger.js";
+import { runAutoForwarderService } from "../importer/forwarder-service.js";
 import { animeKeyboard, episodeKeyboard, resolutionKeyboard } from "./keyboards/index.js";
 import { registerChannelIndexer } from "./register-indexer.js";
 import { registerHelperSystem } from "./register-helper.js";
@@ -71,7 +72,7 @@ bot.command("startfw",async ctx=>{
    "Source Channel: "+sourceChannelId+"\n"+
    "Destination Private Channel: "+targetChannelId+"\n\n"+
    "လုပ်ဆောင်ပုံ: Channel ရဲ့ ပထမဆုံး Post ကနေ နောက်ဆုံး Post အထိ အစဉ်လိုက် စစ်ပြီး Video များကိုသာ ပို့ပါမယ်။ ပြီးရင် Post အသစ်တွေကို ဆက်စောင့်ကြည့်ပါမယ်။\n"+
-   "လိုအပ်ချက်: Session account က Source Channel ကို ဝင်ထားရမယ်၊ PM2 မှာ movieanime-forwarder process run နေရမယ်။"
+   "လိုအပ်ချက်: Session account က Source Channel ကို ဝင်ထားရမယ်၊ movieanime-bot process online ဖြစ်နေရမယ်။"
   );
  }catch(error){
   logger.warn("Auto-forward route setup failed",{sourceChannelId,targetChannelId,animeTitle,error:error instanceof Error?error.message:String(error)});
@@ -174,9 +175,48 @@ bot.command("admin",async ctx=>{
  await ctx.reply("Admin Commands:\n/startfw SOURCE_ID DEST_ID Anime Name — ပထမ Post မှ Video များ auto-forward လုပ်မယ်\n/start — Bot catalog ဖွင့်မယ်\n/forwards — Auto-forward Route စာရင်း\n/stopforward SOURCE_ID — Route ပိတ်မယ်\n/addchannel -100... — Source Channel မှတ်ပုံတင်မယ်\n/channels — Channel စာရင်းကြည့်မယ်\n/addhelper USER_ID — Helper ဖွင့်မယ်\n/helpers — Helper စာရင်း\n/removehelper USER_ID — Helper ပိတ်မယ်\n/addroute Anime Name | -100... — Private Channel ချိတ်မယ်\n/routes — Route စာရင်း\n/helperreviews — Caption မပြည့်စုံသောစာရင်း\n/removeroute Anime Name — Route ပိတ်မယ်\n\nHelper များက Video ကို Bot Private Chat သို့ Caption ပါအောင် ပို့ပါ။");
 });
 
-const shutdown=async(signal:string)=>{
- logger.info("Shutting down bot",{signal});bot.stop();await closeDatabase();process.exit(0);
+const forwarderController = new AbortController();
+let forwarderPromise: Promise<void> = Promise.resolve();
+let shutdownPromise: Promise<void> | undefined;
+
+function startIntegratedAutoForwarder(botUsername: string): void {
+ if (!config.TELEGRAM_API_ID || !config.TELEGRAM_API_HASH || !config.TELEGRAM_USER_SESSION) {
+  logger.info("MTProto auto-forwarding disabled; configure TELEGRAM_API_ID, TELEGRAM_API_HASH and TELEGRAM_USER_SESSION to enable it");
+  return;
+ }
+ logger.info("Starting MTProto auto-forwarder inside movieanime-bot");
+ forwarderPromise = runAutoForwarderService({
+  config,
+  db,
+  botUsername,
+  signal: forwarderController.signal
+ }).catch(error => {
+  logger.error("MTProto auto-forwarder supervisor failed", {
+   error: error instanceof Error ? error.message : String(error)
+  });
+ });
+}
+
+const shutdown=(signal:string): Promise<void>=>{
+ if (shutdownPromise) return shutdownPromise;
+ shutdownPromise = (async()=>{
+  logger.info("Shutting down bot",{signal});
+  forwarderController.abort();
+  bot.stop();
+  await forwarderPromise;
+  await closeDatabase();
+  logger.info("Anime bot shutdown complete");
+ })();
+ return shutdownPromise;
 };
-process.once("SIGINT",()=>void shutdown("SIGINT"));process.once("SIGTERM",()=>void shutdown("SIGTERM"));
+process.once("SIGINT",()=>{void shutdown("SIGINT");});
+process.once("SIGTERM",()=>{void shutdown("SIGTERM");});
 logger.info("Starting Anime bot",{nodeEnv:config.NODE_ENV});
-await bot.start({allowed_updates:["message","callback_query","channel_post","edited_channel_post"],onStart:info=>logger.info("Bot polling started",{username:info.username})});
+await bot.start({
+ allowed_updates:["message","callback_query","channel_post","edited_channel_post"],
+ onStart:info=>{
+  logger.info("Bot polling started",{username:info.username});
+  startIntegratedAutoForwarder(info.username);
+ }
+});
+if (shutdownPromise) await shutdownPromise;

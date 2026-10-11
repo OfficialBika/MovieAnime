@@ -11,4 +11,6 @@ Before use:
 Run with:
 `npm run dev:importer -- <registered-telegram-channel-id>`
 
-This is an initial scanner and has not yet been validated against a live channel. Test history pagination, restart/resume checkpoints, media-type classification, and Telegram rate limits with an authorized test channel before production use.
+The `/startfw` session auto-forward worker is supervised inside the `movieanime-bot` process when all three MTProto settings are configured; do not run a second PM2 process for auto-forwarding. The standalone `npm run start:forwarder` script remains available for diagnosis, but it is not needed for the normal bot deployment.
+
+This initial scanner has not yet been validated against a live channel. Test history pagination, restart/resume checkpoints, media-type classification, and Telegram rate limits with an authorized test channel before production use.
