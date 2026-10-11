@@ -1,8 +1,19 @@
 import { randomUUID } from "node:crypto";
 import type { Api, RawApi } from "grammy";
-import type { Db } from "mongodb";
+import type { Db, Document } from "mongodb";
 import type { MediaVersionDocument } from "../shared/types.js";
 import { logger } from "../shared/logger.js";
+
+interface DeliveryJobInsert extends Document {
+  _id: string;
+  chatId: string;
+  messageIds: number[];
+  deleteAt: Date;
+  status: "pending" | "processing" | "completed" | "retry" | "failed";
+  attempts: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 export async function deliverMedia(input: {
   api: Api<RawApi>;
@@ -16,10 +27,8 @@ export async function deliverMedia(input: {
     throw new Error("Delete delay must be an integer between 60 and 3600 seconds.");
   }
 
-  // Telegram copies the source message server-side; this service never downloads the media.
   const copied = await api.copyMessage(userChatId, Number(media.sourceChannelId), media.sourceMessageId);
   let warningMessageId: number | undefined;
-
   try {
     const minutes = Math.floor(deleteDelaySeconds / 60);
     const seconds = deleteDelaySeconds % 60;
@@ -34,7 +43,7 @@ export async function deliverMedia(input: {
     );
     warningMessageId = warning.message_id;
 
-    await db.collection("delivery_jobs").insertOne({
+    await input.db.collection<DeliveryJobInsert>("delivery_jobs").insertOne({
       _id: randomUUID(),
       chatId: String(userChatId),
       messageIds: [copied.message_id, warningMessageId],
@@ -47,7 +56,6 @@ export async function deliverMedia(input: {
 
     return { mediaMessageId: copied.message_id, warningMessageId };
   } catch (error) {
-    // If scheduling fails, remove the media immediately rather than leave it without a delete job.
     try {
       await api.deleteMessage(userChatId, copied.message_id);
       if (warningMessageId !== undefined) await api.deleteMessage(userChatId, warningMessageId);
