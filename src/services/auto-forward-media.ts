@@ -1,7 +1,8 @@
 import type { Api, RawApi } from "grammy";
 import type { Db, Document } from "mongodb";
 import { buildHelperCaption, type HelperMediaType } from "../helper/metadata.js";
-import { parseResolution } from "../parser/resolution-parser.js";
+import { normalizeMyanmarDigits } from "../parser/normalize.js";
+import { parseResolution, resolutionFromDimensions } from "../parser/resolution-parser.js";
 import { logger } from "../shared/logger.js";
 
 interface AutoForwardRoute extends Document {
@@ -13,13 +14,14 @@ interface AutoForwardRoute extends Document {
 }
 
 function episodeNumberFromCaption(caption: string): number | undefined {
+  const normalized = normalizeMyanmarDigits(caption);
   const patterns = [
     /\(\s*(\d{1,5})\s*\)/i,
     /\b(?:episode|ep)\s*[#.:_-]?\s*(\d{1,5})\b/i,
     /အပိုင်း\s*[-:#]?\s*(\d{1,5})/i
   ];
   for (const pattern of patterns) {
-    const match = caption.match(pattern);
+    const match = normalized.match(pattern);
     if (match?.[1]) {
       const value = Number(match[1]);
       if (Number.isSafeInteger(value) && value >= 1 && value <= 100_000) return value;
@@ -44,6 +46,9 @@ export async function processAutoForwardMedia(input: {
   originalMessageId: number;
   caption: string;
   mediaType: HelperMediaType;
+  videoWidth?: number;
+  videoHeight?: number;
+  mediaFileName?: string;
 }): Promise<AutoForwardMediaResult> {
   const route = await input.db.collection<any>("auto_forward_routes")
     .findOne({ _id: input.sourceChannelId, enabled: true });
@@ -83,7 +88,12 @@ export async function processAutoForwardMedia(input: {
   }
 
   const episodeNumber = episodeNumberFromCaption(input.caption);
-  const parsedResolution = parseResolution(input.caption);
+  // Prefer the actual Telegram video dimensions over labels in the caption.
+  // For document uploads, fall back to an explicit resolution in the filename/caption.
+  const parsedResolution =
+    resolutionFromDimensions(input.videoWidth, input.videoHeight) ??
+    parseResolution(input.caption) ??
+    parseResolution(input.mediaFileName ?? "");
   const metadata = episodeNumber && parsedResolution && parsedResolution !== "UNKNOWN"
     ? { animeTitle: route.animeTitle, episodeNumber, resolution: parsedResolution }
     : undefined;
@@ -100,6 +110,9 @@ export async function processAutoForwardMedia(input: {
           originalSourceMessageId: input.originalMessageId,
           userId: input.userId,
           caption: input.caption,
+          mediaFileName: input.mediaFileName,
+          videoWidth: input.videoWidth,
+          videoHeight: input.videoHeight,
           reason,
           normalizedTitle,
           kind: "auto_forward",
