@@ -2,6 +2,7 @@ import type { Bot, Context } from "grammy";
 import type { Db, Document } from "mongodb";
 import { normalizeRouteKey } from "../helper/metadata.js";
 import { processHelperMedia } from "../services/helper-media.js";
+import { processAutoForwardMedia } from "../services/auto-forward-media.js";
 import { logger } from "../shared/logger.js";
 
 interface HelperUserDocument extends Document {
@@ -227,6 +228,49 @@ export function registerHelperSystem(bot: Bot, db: Db, admins: ReadonlySet<numbe
       mediaType = "document";
     } else {
       return;
+    }
+
+    const forwardOrigin = message.forward_origin;
+    if (forwardOrigin?.type === "channel") {
+      const sessionIdentity = await db.collection<Document>("system_settings").findOne({ _id: "telegram_user_session" });
+      if (sessionIdentity && String(sessionIdentity.userId) === String(ctx.from.id)) {
+        try {
+          const result = await processAutoForwardMedia({
+            api: ctx.api,
+            db,
+            userId: ctx.from.id,
+            sourceChatId: ctx.chat.id,
+            botMessageId: message.message_id,
+            sourceChannelId: String(forwardOrigin.chat.id),
+            originalMessageId: forwardOrigin.message_id,
+            caption: message.caption ?? "",
+            mediaType
+          });
+          if (result.status === "route_not_found") {
+            await ctx.reply("ဒီ Source Channel အတွက် Auto-forward Route မရှိပါ။ Admin က /start SOURCE_ID DEST_ID ကို အသုံးပြုပါ။");
+          } else if (result.status === "duplicate") {
+            await ctx.reply("ဒီ Source post ကို အရင်က လုပ်ဆောင်ပြီးပါပြီ။");
+          } else if (result.status === "review") {
+            await ctx.reply("⚠️ Video ကို လက်ခံရရှိပါတယ်၊ ဒါပေမဲ့ Episode/Resolution ကို caption မှ မခွဲနိုင်လို့ Review ထဲ သိမ်းထားပါတယ်။\nReason: " + result.reason);
+          } else {
+            await ctx.reply(
+              "✅ Auto-forward ပြီးပါပြီ။\nAnime: " + result.animeTitle +
+              "\nEpisode: " + String(result.episodeNumber) +
+              "\nResolution: " + result.resolution +
+              "\nDestination: " + result.targetChannelId
+            );
+          }
+        } catch (error) {
+          logger.error("Auto-forward media processing failed", {
+            userId: ctx.from.id,
+            sourceChannelId: String(forwardOrigin.chat.id),
+            originalMessageId: forwardOrigin.message_id,
+            error: error instanceof Error ? error.message : String(error)
+          });
+          await ctx.reply("Auto-forward မအောင်မြင်ပါ။ Caption၊ Bot permission နဲ့ log ကို စစ်ဆေးပါ။");
+        }
+        return;
+      }
     }
 
     try {

@@ -25,6 +25,7 @@ const envSchema = z.object({
     z.string().optional()
   ),
   IMPORT_BATCH_SIZE: z.coerce.number().int().min(1).max(1000).default(100),
+  AUTO_FORWARD_POLL_INTERVAL_SECONDS: z.coerce.number().int().min(1).max(60).default(5),
   IMPORT_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(2).default(1),
   DELETE_DELAY_SECONDS: z.coerce.number().int().min(60).max(3600).default(300),
   DELETE_WORKER_INTERVAL_SECONDS: z.coerce.number().int().min(1).max(30).default(2),

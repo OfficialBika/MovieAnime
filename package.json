@@ -2,7 +2,7 @@
   "name": "bika-movie-anime-bot",
   "version": "0.1.0",
   "private": true,
-  "description": "Telegram Anime catalog bot with historical channel indexing and timed message cleanup",
+  "description": "Telegram Anime catalog bot with session-based MTProto auto-forwarding and media indexing",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -16,7 +16,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint:types": "tsc --noEmit -p tsconfig.json",
-    "db:indexes": "tsx scripts/setup-indexes.ts"
+    "db:indexes": "tsx scripts/setup-indexes.ts",
+    "dev:forwarder": "tsx watch src/importer/auto-forwarder.ts",
+    "start:forwarder": "node dist/importer/auto-forwarder.js"
   },
   "dependencies": {
     "dotenv": "^16.4.7",

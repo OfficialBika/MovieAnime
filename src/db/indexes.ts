@@ -37,4 +37,10 @@ export async function ensureIndexes(db: Db): Promise<void> {
   await db.collection("helper_submissions").createIndex(
     { status: 1, updatedAt: 1 }, { name: "helper_submission_status" }
   );
+  await db.collection("auto_forward_routes").createIndex(
+    { enabled: 1, updatedAt: 1 }, { name: "auto_forward_routes_enabled" }
+  );
+  await db.collection("auto_forward_submissions").createIndex(
+    { status: 1, updatedAt: 1 }, { name: "auto_forward_submission_status" }
+  );
 }
