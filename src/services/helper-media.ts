@@ -8,6 +8,18 @@ import {
   type HelperMediaType
 } from "../helper/metadata.js";
 
+interface StringDocument extends Document {
+  _id: string;
+}
+
+interface EpisodeDocument extends Document {
+  _id: string;
+  animeId: string;
+  episodeNumber: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 interface HelperUserDocument extends Document {
   _id: string;
   userId: number;
@@ -52,7 +64,7 @@ async function saveReview(input: {
 }): Promise<void> {
   const now = new Date();
   const id = String(input.sourceChatId) + ":" + String(input.sourceMessageId);
-  await input.db.collection<Document>("helper_review_items").updateOne(
+  await input.db.collection<StringDocument>("helper_review_items").updateOne(
     { _id: id },
     {
       $set: {
@@ -157,7 +169,7 @@ export async function processHelperMedia(input: {
     copiedMessageId = copied.message_id;
 
     const writtenAt = new Date();
-    await input.db.collection<Document>("episodes").updateOne(
+    await input.db.collection<EpisodeDocument>("episodes").updateOne(
       { _id: episodeId },
       {
         $setOnInsert: {
@@ -219,7 +231,7 @@ export async function processHelperMedia(input: {
           sourceMessageId: copiedMessageId
         });
         const remaining = await input.db.collection<Document>("media_versions").findOne({ episodeId });
-        if (!remaining) await input.db.collection<Document>("episodes").deleteOne({ _id: episodeId });
+        if (!remaining) await input.db.collection<EpisodeDocument>("episodes").deleteOne({ _id: episodeId });
       } catch (rollbackError) {
         logger.error("Helper delivery rollback failed", {
           submissionId,
