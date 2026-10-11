@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.session
+*.session-journal
+telegram-session*
+logs/
+*.log
+.DS_Store
