@@ -16,7 +16,7 @@ function episodeNumberFromCaption(caption: string): number | undefined {
   const patterns = [
     /\(\s*(\d{1,5})\s*\)/i,
     /\b(?:episode|ep)\s*[#.:_-]?\s*(\d{1,5})\b/i,
-    /အပိုင်း\\s*[-:#]?\\s*(\\d{1,5})/i
+    /အပိုင်း\s*[-:#]?\s*(\d{1,5})/i
   ];
   for (const pattern of patterns) {
     const match = caption.match(pattern);
