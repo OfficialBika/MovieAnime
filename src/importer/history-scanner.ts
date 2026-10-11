@@ -5,135 +5,65 @@ import { parseSourceMessage } from "../parser/episode-parser.js";
 import { classifyTeleprotoMedia } from "./media-classifier.js";
 import { logger } from "../shared/logger.js";
 
-interface ImportOptions {
-  client: TelegramClient;
-  db: Db;
-  channelId: string;
-  batchSize: number;
-  signal?: AbortSignal;
-}
+interface ImportOptions { client: TelegramClient; db: Db; channelId: string; batchSize: number; signal?: AbortSignal; }
 interface StringDoc extends Document { _id: string; }
 
 async function resolveAuthorizedChannel(client: TelegramClient, channelId: string): Promise<Api.Channel> {
-  if (!/^-100\d+$/.test(channelId)) {
-    throw new Error("Expected a Bot API channel ID in -100… format.");
-  }
+  if (!/^-100\d+$/.test(channelId)) throw new Error("Expected a Bot API channel ID in -100… format.");
 
-  // Teleproto resolves numeric channel IDs from its entity cache. Load the account's
-  // dialogs first, then use the matched Dialog (which also carries the channel entity).
+  // Dialog entries populate Teleproto's entity cache. Resolve the matching marked ID
+  // through that cache instead of passing a custom Dialog object as EntityLike.
+  let found = false;
   for await (const dialog of client.iterDialogs({})) {
-    if (String(dialog.id) !== channelId) continue;
-    const entity = await client.getEntity(dialog);
-    if (!(entity instanceof Api.Channel)) {
-      throw new Error("The registered Telegram peer is not a channel.");
-    }
-    return entity;
+    if (String(dialog.id) === channelId) { found = true; break; }
   }
-  throw new Error("The channel is not in this user session's accessible dialogs. Open/join the authorized channel with that account and retry.");
+  if (!found) throw new Error("Channel is not present in this session's accessible dialogs. Open/join the authorized channel with that account and retry.");
+
+  const entity = await client.getEntity(Number(channelId));
+  if (!(entity instanceof Api.Channel)) throw new Error("Registered source peer is not a channel.");
+  return entity;
 }
 
-/**
- * Indexes metadata and source message IDs only; this does not download media.
- * Use only channels you own or are authorized to index.
- */
-export async function scanChannelHistory({ client, db, channelId, batchSize, signal }: ImportOptions): Promise<void> {
-  const channels = db.collection<Document>("anime_channels");
-  const jobs = db.collection<StringDoc>("import_jobs");
-  const episodes = db.collection<StringDoc>("episodes");
-  const media = db.collection<StringDoc>("media_versions");
-  const reviews = db.collection<Document>("review_items");
-
-  const channel = await resolveAuthorizedChannel(client, channelId);
-  const channelDoc = await channels.findOne({ telegramChannelId: channelId, enabled: true });
-  if (!channelDoc) throw new Error("Channel must be registered and enabled before import.");
-
-  const jobId = channelId;
-  const now = new Date();
-  const jobFilter: Document = { _id: { $eq: jobId } };
-  const current = await jobs.findOne(jobFilter);
-  if (!current) {
-    await jobs.insertOne({
-      _id: jobId, channelId, status: "running", scannedCount: 0, indexedCount: 0,
-      skippedCount: 0, errorCount: 0, leaseUntil: new Date(Date.now() + 60_000), updatedAt: now
-    });
-  } else {
-    const claim = await jobs.updateOne(
-      { ...jobFilter, $or: [{ status: { $in: ["pending", "paused", "failed"] } }, { leaseUntil: { $lt: now } }] },
-      { $set: { status: "running", leaseUntil: new Date(Date.now() + 60_000), updatedAt: now } }
-    );
-    if (claim.modifiedCount !== 1) throw new Error("Import job is already running elsewhere.");
+export async function scanChannelHistory({client,db,channelId,batchSize,signal}:ImportOptions):Promise<void>{
+ const channels=db.collection<Document>("anime_channels"),jobs=db.collection<StringDoc>("import_jobs");
+ const episodes=db.collection<StringDoc>("episodes"),media=db.collection<StringDoc>("media_versions"),reviews=db.collection<Document>("review_items");
+ const channel=await resolveAuthorizedChannel(client,channelId);
+ const channelDoc=await channels.findOne({telegramChannelId:channelId,enabled:true});
+ if(!channelDoc)throw new Error("Channel must be registered and enabled before import.");
+ const jobId=channelId,now=new Date(),jobFilter:Document={_id:{$eq:jobId}};
+ const current=await jobs.findOne(jobFilter);
+ if(!current)await jobs.insertOne({_id:jobId,channelId,status:"running",scannedCount:0,indexedCount:0,skippedCount:0,errorCount:0,leaseUntil:new Date(Date.now()+60_000),updatedAt:now});
+ else{
+  const claim=await jobs.updateOne({...jobFilter,$or:[{status:{$in:["pending","paused","failed"]}},{leaseUntil:{$lt:now}}]},{$set:{status:"running",leaseUntil:new Date(Date.now()+60_000),updatedAt:now}});
+  if(claim.modifiedCount!==1)throw new Error("Import job is already running elsewhere.");
+ }
+ const state=await jobs.findOne(jobFilter);let cursor=typeof state?.cursorMessageId==="number"?state.cursorMessageId:undefined;
+ try{
+  for(;;){
+   if(signal?.aborted)throw new Error("Import aborted");
+   const page=await client.getMessages(channel,{limit:batchSize,...(cursor!==undefined?{maxId:cursor}:{})});
+   if(!page.length)break;
+   for(const message of page){
+    if(signal?.aborted)throw new Error("Import aborted");
+    const mediaType=classifyTeleprotoMedia(message.media);
+    const parsed=parseSourceMessage({channelId,messageId:message.id,text:message.message??"",hasMedia:mediaType!==undefined,...(mediaType?{mediaType}:{})});
+    if(parsed.status==="valid"){
+     const animeId=String(channelDoc._id),episodeId=`${animeId}:${parsed.value.episodeNumber}`;
+     await episodes.updateOne({_id:episodeId},{$setOnInsert:{_id:episodeId,animeId,episodeNumber:parsed.value.episodeNumber,createdAt:new Date()},$set:{updatedAt:new Date()}},{upsert:true});
+     await media.updateOne({sourceChannelId:channelId,sourceMessageId:message.id},{$set:{_id:`${channelId}:${message.id}`,episodeId,resolution:parsed.value.resolution??"UNKNOWN",sourceChannelId:channelId,sourceMessageId:message.id,mediaType:mediaType??"other",available:true,indexedAt:new Date()}},{upsert:true});
+     await jobs.updateOne(jobFilter,{$inc:{scannedCount:1,indexedCount:1}});
+    }else if(parsed.status==="review"){
+     await reviews.updateOne({sourceChannelId:channelId,sourceMessageId:message.id},{$set:{sourceChannelId:channelId,sourceMessageId:message.id,reason:parsed.reason,text:parsed.normalizedTitle,updatedAt:new Date()}},{upsert:true});
+     await jobs.updateOne(jobFilter,{$inc:{scannedCount:1,errorCount:1}});
+    }else await jobs.updateOne(jobFilter,{$inc:{scannedCount:1,skippedCount:1}});
+   }
+   const oldest=page[page.length-1];if(!oldest)break;cursor=oldest.id;
+   await jobs.updateOne(jobFilter,{$set:{cursorMessageId:cursor,leaseUntil:new Date(Date.now()+60_000),updatedAt:new Date()}});
+   await new Promise(resolve=>setTimeout(resolve,500));
   }
-
-  const state = await jobs.findOne(jobFilter);
-  let cursor = typeof state?.cursorMessageId === "number" ? state.cursorMessageId : undefined;
-  try {
-    for (;;) {
-      if (signal?.aborted) throw new Error("Import aborted");
-      const page = await client.getMessages(channel, {
-        limit: batchSize,
-        ...(cursor !== undefined ? { maxId: cursor } : {})
-      });
-      if (page.length === 0) break;
-
-      for (const message of page) {
-        if (signal?.aborted) throw new Error("Import aborted");
-        const mediaType = classifyTeleprotoMedia(message.media);
-        const parsed = parseSourceMessage({
-          channelId,
-          messageId: message.id,
-          text: message.message ?? "",
-          hasMedia: mediaType !== undefined,
-          ...(mediaType ? { mediaType } : {})
-        });
-
-        if (parsed.status === "valid") {
-          const animeId = String(channelDoc._id);
-          const episodeId = `${animeId}:${parsed.value.episodeNumber}`;
-          await episodes.updateOne(
-            { _id: episodeId },
-            { $setOnInsert: { _id: episodeId, animeId, episodeNumber: parsed.value.episodeNumber, createdAt: new Date() }, $set: { updatedAt: new Date() } },
-            { upsert: true }
-          );
-          await media.updateOne(
-            { sourceChannelId: channelId, sourceMessageId: message.id },
-            { $set: {
-              _id: `${channelId}:${message.id}`, episodeId,
-              resolution: parsed.value.resolution ?? "UNKNOWN",
-              sourceChannelId: channelId, sourceMessageId: message.id,
-              mediaType: mediaType ?? "other", available: true, indexedAt: new Date()
-            } },
-            { upsert: true }
-          );
-          await jobs.updateOne(jobFilter, { $inc: { scannedCount: 1, indexedCount: 1 } });
-        } else if (parsed.status === "review") {
-          await reviews.updateOne(
-            { sourceChannelId: channelId, sourceMessageId: message.id },
-            { $set: { sourceChannelId: channelId, sourceMessageId: message.id, reason: parsed.reason, text: parsed.normalizedTitle, updatedAt: new Date() } },
-            { upsert: true }
-          );
-          await jobs.updateOne(jobFilter, { $inc: { scannedCount: 1, errorCount: 1 } });
-        } else {
-          await jobs.updateOne(jobFilter, { $inc: { scannedCount: 1, skippedCount: 1 } });
-        }
-      }
-
-      // getMessages returns newest-first. maxId is exclusive, so resume below
-      // the oldest processed message without duplicating an indexed batch.
-      const oldest = page[page.length - 1];
-      if (!oldest) break;
-      cursor = oldest.id;
-      await jobs.updateOne(jobFilter, {
-        $set: { cursorMessageId: cursor, leaseUntil: new Date(Date.now() + 60_000), updatedAt: new Date() }
-      });
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-
-    await jobs.updateOne(jobFilter, { $set: { status: "completed", leaseUntil: new Date(0), updatedAt: new Date() } });
-  } catch (error) {
-    await jobs.updateOne(jobFilter, {
-      $set: { status: "paused", leaseUntil: new Date(0), updatedAt: new Date(), lastError: error instanceof Error ? error.message : String(error) }
-    });
-    logger.error("History scan paused", { channelId, error: error instanceof Error ? error.message : String(error) });
-    throw error;
-  }
+  await jobs.updateOne(jobFilter,{$set:{status:"completed",leaseUntil:new Date(0),updatedAt:new Date()}});
+ }catch(error){
+  await jobs.updateOne(jobFilter,{$set:{status:"paused",leaseUntil:new Date(0),updatedAt:new Date(),lastError:error instanceof Error?error.message:String(error)}});
+  logger.error("History scan paused",{channelId,error:error instanceof Error?error.message:String(error)});throw error;
+ }
 }
