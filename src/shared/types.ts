@@ -57,7 +57,7 @@ export interface DeliveryJobDocument {
   chatId: string;
   messageIds: number[];
   deleteAt: Date;
-  status: "pending" | "processing" | "completed" | "retry";
+  status: "pending" | "processing" | "completed" | "retry" | "failed";
   attempts: number;
   createdAt: Date;
   updatedAt: Date;
