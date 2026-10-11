@@ -1,8 +1,7 @@
 import type { Context } from "grammy";
-import type { Db, Document, Filter } from "mongodb";
+import type { Db, Document } from "mongodb";
 import { parseSourceMessage } from "../parser/episode-parser.js";
 import { logger } from "../shared/logger.js";
-const byStringId=(id:string):Filter<Document>=>({_id:{$eq:id}} as Filter<Document>);
 export async function indexChannelPost(ctx:Context,db:Db):Promise<void>{
  const post=ctx.channelPost??ctx.editedChannelPost;if(!post)return;
  const channelId=String(post.chat.id),messageId=post.message_id;
@@ -14,6 +13,6 @@ export async function indexChannelPost(ctx:Context,db:Db):Promise<void>{
  if(parsed.status==="skip"){logger.debug("Channel post skipped",{channelId,messageId,reason:parsed.reason});return;}
  if(parsed.status==="review"){await reviews.updateOne({sourceChannelId:channelId,sourceMessageId:messageId},{$set:{sourceChannelId:channelId,sourceMessageId:messageId,reason:parsed.reason,text:parsed.normalizedTitle,updatedAt:new Date()}},{upsert:true});return;}
  const animeId=String(registered._id),episodeId=`${animeId}:${parsed.value.episodeNumber}`;
- await episodes.updateOne(byStringId(episodeId),{$setOnInsert:{_id:episodeId,animeId,episodeNumber:parsed.value.episodeNumber,createdAt:new Date()},$set:{updatedAt:new Date()}},{upsert:true});
+ await episodes.updateOne({_id:{$eq:episodeId}},{$setOnInsert:{_id:episodeId,animeId,episodeNumber:parsed.value.episodeNumber,createdAt:new Date()},$set:{updatedAt:new Date()}},{upsert:true});
  await media.updateOne({sourceChannelId:channelId,sourceMessageId:messageId},{$set:{_id:`${channelId}:${messageId}`,episodeId,resolution:parsed.value.resolution??"UNKNOWN",sourceChannelId:channelId,sourceMessageId:messageId,mediaType:mediaType??"other",available:true,indexedAt:new Date()}},{upsert:true});
 }
