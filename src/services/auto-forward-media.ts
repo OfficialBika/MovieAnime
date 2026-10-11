@@ -1,13 +1,31 @@
 import type { Api, RawApi } from "grammy";
 import type { Db, Document } from "mongodb";
-import { buildHelperCaption, parseHelperMetadata, type HelperMediaType } from "../helper/metadata.js";
+import { buildHelperCaption, type HelperMediaType } from "../helper/metadata.js";
+import { parseResolution } from "../parser/resolution-parser.js";
 import { logger } from "../shared/logger.js";
 
 interface AutoForwardRoute extends Document {
   _id: string;
   sourceChannelId: string;
   targetChannelId: string;
+  animeTitle: string;
   enabled: boolean;
+}
+
+function episodeNumberFromCaption(caption: string): number | undefined {
+  const patterns = [
+    /\\(\\s*(\\d{1,5})\\s*\\)/i,
+    /\\b(?:episode|ep)\\s*[#.:_-]?\\s*(\\d{1,5})\\b/i,
+    /အပိုင်း\\s*[-:#]?\\s*(\\d{1,5})/i
+  ];
+  for (const pattern of patterns) {
+    const match = caption.match(pattern);
+    if (match?.[1]) {
+      const value = Number(match[1]);
+      if (Number.isSafeInteger(value) && value >= 1 && value <= 100_000) return value;
+    }
+  }
+  return undefined;
 }
 
 export type AutoForwardMediaResult =
@@ -64,10 +82,14 @@ export async function processAutoForwardMedia(input: {
     }
   }
 
-  const parsed = parseHelperMetadata(input.caption, input.mediaType);
-  if (parsed.status !== "valid") {
-    const reason = parsed.reason;
-    const normalizedTitle = parsed.status === "review" ? parsed.normalizedTitle : input.caption.trim();
+  const episodeNumber = episodeNumberFromCaption(input.caption);
+  const parsedResolution = parseResolution(input.caption);
+  const metadata = episodeNumber && parsedResolution && parsedResolution !== "UNKNOWN"
+    ? { animeTitle: route.animeTitle, episodeNumber, resolution: parsedResolution }
+    : undefined;
+  if (!metadata) {
+    const reason = !episodeNumber ? "episode_number_not_found" : "resolution_not_found";
+    const normalizedTitle = input.caption.trim();
     await input.db.collection<Document>("helper_review_items").updateOne(
       { _id: "auto-forward:" + submissionId },
       {
@@ -95,7 +117,6 @@ export async function processAutoForwardMedia(input: {
     return { status: "review", reason };
   }
 
-  const metadata = parsed.value;
   let copiedMessageId: number | undefined;
   let episodeId: string | undefined;
   try {
