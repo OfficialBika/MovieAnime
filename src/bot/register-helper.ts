@@ -235,6 +235,8 @@ export function registerHelperSystem(bot: Bot, db: Db, admins: ReadonlySet<numbe
       const sessionIdentity = await db.collection<any>("system_settings").findOne({ _id: "telegram_user_session" });
       if (sessionIdentity && String(sessionIdentity.userId) === String(ctx.from.id)) {
         try {
+          const hasVideo = "video" in message && Boolean(message.video);
+          const hasDocument = "document" in message && Boolean(message.document);
           const result = await processAutoForwardMedia({
             api: ctx.api,
             db,
@@ -244,14 +246,17 @@ export function registerHelperSystem(bot: Bot, db: Db, admins: ReadonlySet<numbe
             sourceChannelId: String(forwardOrigin.chat.id),
             originalMessageId: forwardOrigin.message_id,
             caption: message.caption ?? "",
-            mediaType
+            mediaType,
+            videoWidth: hasVideo && "video" in message ? message.video?.width : undefined,
+            videoHeight: hasVideo && "video" in message ? message.video?.height : undefined,
+            mediaFileName: hasDocument && "document" in message ? message.document?.file_name : undefined
           });
           if (result.status === "route_not_found") {
             await ctx.reply("ဒီ Source Channel အတွက် Auto-forward Route မရှိပါ။ Admin က /startfw SOURCE_ID DEST_ID Anime Name ကို အသုံးပြုပါ။");
           } else if (result.status === "duplicate") {
             await ctx.reply("ဒီ Source post ကို အရင်က လုပ်ဆောင်ပြီးပါပြီ။");
           } else if (result.status === "review") {
-            await ctx.reply("⚠️ Video ကို လက်ခံရရှိပါတယ်၊ ဒါပေမဲ့ Episode/Resolution ကို caption မှ မခွဲနိုင်လို့ Review ထဲ သိမ်းထားပါတယ်။\nReason: " + result.reason);
+            await ctx.reply("⚠️ Video ကို လက်ခံရရှိပါတယ်၊ ဒါပေမဲ့ Episode/Resolution ကို auto မခွဲနိုင်လို့ Review ထဲ သိမ်းထားပါတယ်။\nReason: " + result.reason);
           } else {
             await ctx.reply(
               "✅ Auto-forward ပြီးပါပြီ။\nAnime: " + result.animeTitle +
