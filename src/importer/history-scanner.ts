@@ -1,24 +1,20 @@
 import { Api } from "telegram";
 import type { TelegramClient } from "telegram";
-import type { Db, Document } from "mongodb";
+import type { Db, Document, Filter } from "mongodb";
 import { parseSourceMessage } from "../parser/episode-parser.js";
 import { logger } from "../shared/logger.js";
 interface ImportOptions { client:TelegramClient; db:Db; channelId:string; batchSize:number; signal?:AbortSignal; }
+const byStringId=(id:string):Filter<Document>=>({_id:{$eq:id}} as Filter<Document>);
 export async function scanChannelHistory({client,db,channelId,batchSize,signal}:ImportOptions):Promise<void>{
- const channels=db.collection<Document>("anime_channels");
- const jobs=db.collection<Document>("import_jobs");
- const episodes=db.collection<Document>("episodes");
- const media=db.collection<Document>("media_versions");
- const reviews=db.collection<Document>("review_items");
+ const channels=db.collection<Document>("anime_channels"),jobs=db.collection<Document>("import_jobs");
+ const episodes=db.collection<Document>("episodes"),media=db.collection<Document>("media_versions"),reviews=db.collection<Document>("review_items");
  const channel=await client.getEntity(channelId) as Api.Channel;
  const channelDoc=await channels.findOne({telegramChannelId:channelId,enabled:true});
  if(!channelDoc)throw new Error("Channel must be registered and enabled before import.");
- const jobId=channelId; const now=new Date();
- const jobFilter:Document={_id:jobId};
+ const jobId=channelId,now=new Date(),jobFilter=byStringId(jobId);
  const current=await jobs.findOne(jobFilter);
- if(!current){
-  await jobs.insertOne({_id:jobId,channelId,status:"running",scannedCount:0,indexedCount:0,skippedCount:0,errorCount:0,leaseUntil:new Date(Date.now()+60_000),updatedAt:now} as Document);
- }else{
+ if(!current)await jobs.insertOne({_id:jobId,channelId,status:"running",scannedCount:0,indexedCount:0,skippedCount:0,errorCount:0,leaseUntil:new Date(Date.now()+60_000),updatedAt:now} as Document);
+ else{
   const claim=await jobs.updateOne({...jobFilter,$or:[{status:{$in:["pending","paused","failed"]}},{leaseUntil:{$lt:now}}]},{$set:{status:"running",leaseUntil:new Date(Date.now()+60_000),updatedAt:now}});
   if(claim.modifiedCount!==1)throw new Error("Import job is already running elsewhere.");
  }
@@ -26,15 +22,14 @@ export async function scanChannelHistory({client,db,channelId,batchSize,signal}:
  try{
   for(;;){
    if(signal?.aborted)throw new Error("Import aborted");
-   const page=await client.getMessages(channel,{limit:batchSize,...(cursor!==undefined?{maxId:cursor}:{})});
-   if(!page.length)break;
+   const page=await client.getMessages(channel,{limit:batchSize,...(cursor!==undefined?{maxId:cursor}:{})});if(!page.length)break;
    for(const message of page){
     if(signal?.aborted)throw new Error("Import aborted");
     const hasMedia=Boolean(message.media);
     const parsed=parseSourceMessage({channelId,messageId:message.id,text:message.message??"",hasMedia,...(hasMedia?{mediaType:"other" as const}:{})});
     if(parsed.status==="valid"){
-     const animeId=String(channelDoc._id);const episodeId=`${animeId}:${parsed.value.episodeNumber}`;
-     await episodes.updateOne({_id:episodeId},{$setOnInsert:{_id:episodeId,animeId,episodeNumber:parsed.value.episodeNumber,createdAt:new Date()},$set:{updatedAt:new Date()}},{upsert:true});
+     const animeId=String(channelDoc._id),episodeId=`${animeId}:${parsed.value.episodeNumber}`;
+     await episodes.updateOne(byStringId(episodeId),{$setOnInsert:{_id:episodeId,animeId,episodeNumber:parsed.value.episodeNumber,createdAt:new Date()},$set:{updatedAt:new Date()}},{upsert:true});
      await media.updateOne({sourceChannelId:channelId,sourceMessageId:message.id},{$set:{_id:`${channelId}:${message.id}`,episodeId,resolution:parsed.value.resolution??"UNKNOWN",sourceChannelId:channelId,sourceMessageId:message.id,mediaType:"other",available:true,indexedAt:new Date()}},{upsert:true});
      await jobs.updateOne(jobFilter,{$inc:{scannedCount:1,indexedCount:1}});
     }else if(parsed.status==="review"){
