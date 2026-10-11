@@ -107,7 +107,7 @@ export function registerHelperSystem(bot: Bot, db: Db, admins: ReadonlySet<numbe
         return;
       }
 
-      const previous = await db.collection<HelperRouteDocument>("helper_routes").findOne({ _id: routeKey });
+      const previous = await db.collection<any>("helper_routes").findOne({ _id: routeKey });
       if (previous?.targetChannelId && previous.targetChannelId !== targetChannelId) {
         await db.collection<Document>("anime_channels").updateOne(
           { telegramChannelId: previous.targetChannelId },
@@ -128,7 +128,7 @@ export function registerHelperSystem(bot: Bot, db: Db, admins: ReadonlySet<numbe
       if (!animeChannel) throw new Error("Could not load the destination anime channel after registration.");
       const animeId = String(animeChannel._id);
 
-      await db.collection<HelperRouteDocument>("helper_routes").updateOne(
+      await db.collection<any>("helper_routes").updateOne(
         { _id: routeKey },
         {
           $set: { animeTitle, animeId, targetChannelId, enabled: true, updatedAt: now },
@@ -149,7 +149,7 @@ export function registerHelperSystem(bot: Bot, db: Db, admins: ReadonlySet<numbe
 
   bot.command("routes", async (ctx) => {
     if (!(await requireAdmin(ctx, admins))) return;
-    const routes = await db.collection<HelperRouteDocument>("helper_routes").find({ enabled: true }).sort({ animeTitle: 1 }).toArray();
+    const routes = await db.collection<any>("helper_routes").find({ enabled: true }).sort({ animeTitle: 1 }).toArray();
     await ctx.reply(routes.length
       ? "အသုံးပြုနေသော Helper Routes:\n" + routes.map((route) => "• " + route.animeTitle + " → " + route.targetChannelId).join("\n")
       : "Route မရှိသေးပါ။ /addroute Anime Name | -100...");
@@ -163,13 +163,13 @@ export function registerHelperSystem(bot: Bot, db: Db, admins: ReadonlySet<numbe
       await ctx.reply("အသုံးပြုပုံ: /removeroute Anime Name");
       return;
     }
-    const route = await db.collection<HelperRouteDocument>("helper_routes").findOne({ _id: routeKey, enabled: true });
+    const route = await db.collection<any>("helper_routes").findOne({ _id: routeKey, enabled: true });
     if (!route) {
       await ctx.reply("ဒီ Anime Route ကို မတွေ့ပါ။");
       return;
     }
     const now = new Date();
-    await db.collection<HelperRouteDocument>("helper_routes").updateOne(
+    await db.collection<any>("helper_routes").updateOne(
       { _id: routeKey },
       { $set: { enabled: false, updatedAt: now } }
     );
