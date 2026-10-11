@@ -4,6 +4,12 @@ import { normalizeRouteKey } from "../helper/metadata.js";
 import { processHelperMedia } from "../services/helper-media.js";
 import { logger } from "../shared/logger.js";
 
+interface HelperUserDocument extends Document {
+  _id: string;
+  userId: number;
+  enabled: boolean;
+}
+
 interface HelperRouteDocument extends Document {
   _id: string;
   animeTitle: string;
@@ -32,7 +38,7 @@ export function registerHelperSystem(bot: Bot, db: Db, admins: ReadonlySet<numbe
       return;
     }
     const now = new Date();
-    await db.collection<Document>("helper_users").updateOne(
+    await db.collection<HelperUserDocument>("helper_users").updateOne(
       { _id: String(userId) },
       {
         $set: { userId, enabled: true, updatedAt: now },
