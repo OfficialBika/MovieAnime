@@ -8,7 +8,6 @@ import { logger } from "../shared/logger.js";
 import { animeKeyboard, episodeKeyboard, resolutionKeyboard } from "./keyboards/index.js";
 import { registerChannelIndexer } from "./register-indexer.js";
 import { registerHelperSystem } from "./register-helper.js";
-import { registerAutoForwardInbox } from "./register-auto-forward.js";
 import { deliverMedia } from "../services/media-delivery.js";
 import type { Db } from "mongodb";
 import type { MediaVersionDocument } from "../shared/types.js";
@@ -18,7 +17,6 @@ const db=await connectDatabase(config);await ensureIndexes(db);
 const catalog=new CatalogRepository(db);
 const bot=new Bot(config.BOT_TOKEN,{client:{apiRoot:config.BOT_API_ROOT}});
 registerChannelIndexer(bot,db);
-registerAutoForwardInbox(bot,db);
 registerHelperSystem(bot,db,admins);
 
 bot.catch(({error,ctx})=>{
