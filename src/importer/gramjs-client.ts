@@ -1,10 +1,10 @@
-import { TelegramClient } from "telegram";
-import { StringSession } from "telegram/sessions/index.js";
+import { TelegramClient } from "teleproto";
+import { StringSession } from "teleproto/sessions";
 import type { AppConfig } from "../config/env.js";
 
 export function createGramJsClient(config: AppConfig): TelegramClient {
   if (!config.TELEGRAM_API_ID || !config.TELEGRAM_API_HASH || !config.TELEGRAM_USER_SESSION) {
-    throw new Error("GramJS import is disabled: configure API_ID, API_HASH and a User Session.");
+    throw new Error("History import is disabled: configure API_ID, API_HASH and an authorized User Session.");
   }
   return new TelegramClient(
     new StringSession(config.TELEGRAM_USER_SESSION),

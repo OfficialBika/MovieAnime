@@ -1,5 +1,5 @@
-import { Api } from "telegram";
-import type { TelegramClient } from "telegram";
+import { Api } from "teleproto";
+import type { TelegramClient } from "teleproto";
 import type { Db, Document } from "mongodb";
 import { parseSourceMessage } from "../parser/episode-parser.js";
 import { logger } from "../shared/logger.js";
