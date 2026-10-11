@@ -29,7 +29,7 @@ try {
   const botIdentity = await bot.api.getMe();
   if (!botIdentity.username) throw new Error("Bot username could not be resolved from BOT_TOKEN.");
 
-  const settings = db.collection<Document>("system_settings");
+  const settings = db.collection<any>("system_settings");
   const previous = await settings.findOne({ _id: "telegram_user_session" });
   const sessionUserId = String(sessionUser.id);
   await settings.updateOne(
