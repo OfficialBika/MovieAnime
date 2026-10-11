@@ -9,6 +9,7 @@ interface AutoForwardRoute extends Document {
   _id: string;
   sourceChannelId: string;
   targetChannelId: string;
+  animeTitle: string;
   enabled: boolean;
   lastProcessedMessageId?: number;
   updatedAt?: Date;
@@ -52,20 +53,19 @@ async function pollRoute(input: {
   const { client, db, route, botUsername, cache, batchSize, signal } = input;
   const routes = db.collection<AutoForwardRoute>("auto_forward_routes");
   const channel = await resolveAuthorizedChannel(client, route.sourceChannelId, cache);
-  let cursor = route.lastProcessedMessageId;
-  if (typeof cursor !== "number") {
-    const latest = await client.getMessages(channel, { limit: 1 });
-    cursor = latest[0]?.id ?? 0;
+  // Start at message ID 0 so the initial run replays channel history from oldest to newest.
+  // The persisted cursor then makes later polls incremental and restart-safe.
+  let cursor = typeof route.lastProcessedMessageId === "number" ? route.lastProcessedMessageId : 0;
+  if (typeof route.lastProcessedMessageId !== "number") {
     await routes.updateOne(
       { _id: route._id, lastProcessedMessageId: { $exists: false } },
-      { $set: { lastProcessedMessageId: cursor, updatedAt: new Date(), initializedAt: new Date() } }
+      { $set: { lastProcessedMessageId: 0, updatedAt: new Date(), initializedAt: new Date() } }
     );
-    logger.info("Auto-forward route initialized; existing posts will not be replayed", {
+    logger.info("Auto-forward route initialized from the first post", {
       sourceChannelId: route.sourceChannelId,
       targetChannelId: route.targetChannelId,
-      lastProcessedMessageId: cursor
+      animeTitle: route.animeTitle
     });
-    return;
   }
 
   for await (const message of client.iterMessages(channel, {
