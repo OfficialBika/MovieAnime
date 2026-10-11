@@ -192,14 +192,14 @@ export function registerHelperSystem(bot: Bot, db: Db, admins: ReadonlySet<numbe
     }
     const lines = reviews.map((item, index) => {
       const title = String(item.normalizedTitle ?? item.caption ?? "(caption မရှိ)")
-        .replace(/\\s+/g, " ")
+        .replace(/\s+/g, " ")
         .slice(0, 120);
       return String(index + 1) + ". " + title +
-        "\\nReason: " + String(item.reason ?? "unknown") +
-        "\\nHelper ID: " + String(item.userId ?? "unknown") +
-        "\\nMessage ID: " + String(item.sourceMessageId ?? "unknown");
+        "\nReason: " + String(item.reason ?? "unknown") +
+        "\nHelper ID: " + String(item.userId ?? "unknown") +
+        "\nMessage ID: " + String(item.sourceMessageId ?? "unknown");
     });
-    await ctx.reply("Pending Helper Review (နောက်ဆုံး " + String(reviews.length) + " ခု)\\n\\n" + lines.join("\\n\\n"));
+    await ctx.reply("Pending Helper Review (နောက်ဆုံး " + String(reviews.length) + " ခု)\n\n" + lines.join("\n\n"));
   });
 
   bot.command("helperguide", async (ctx) => {
