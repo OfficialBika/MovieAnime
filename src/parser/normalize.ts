@@ -8,6 +8,11 @@ export function normalizePostText(input: string): string {
     .trim();
 }
 
+export function normalizeMyanmarDigits(input: string): string {
+  const myanmarDigits = "၀၁၂၃၄၅၆၇၈၉";
+  return input.replace(/[၀-၉]/g, (digit) => String(myanmarDigits.indexOf(digit)));
+}
+
 export function normalizeResolutionToken(input: string): string {
   return input.toUpperCase().replace(/[\s._-]+/g, "");
 }
