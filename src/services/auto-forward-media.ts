@@ -46,9 +46,9 @@ export async function processAutoForwardMedia(input: {
   originalMessageId: number;
   caption: string;
   mediaType: HelperMediaType;
-  videoWidth?: number;
-  videoHeight?: number;
-  mediaFileName?: string;
+  videoWidth?: number | undefined;
+  videoHeight?: number | undefined;
+  mediaFileName?: string | undefined;
 }): Promise<AutoForwardMediaResult> {
   const route = await input.db.collection<any>("auto_forward_routes")
     .findOne({ _id: input.sourceChannelId, enabled: true });
