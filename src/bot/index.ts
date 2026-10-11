@@ -61,7 +61,7 @@ bot.command("startfw",async ctx=>{
    await ctx.reply("Destination Channel ထဲမှာ Bot ရဲ့ Post Messages ခွင့်ကို ဖွင့်ပေးပါ။");return;
   }
   const now=new Date();
-  await db.collection("auto_forward_routes").updateOne(
+  await db.collection<any>("auto_forward_routes").updateOne(
    {_id:sourceChannelId},
    {$set:{sourceChannelId,targetChannelId,animeTitle,enabled:true,lastProcessedMessageId:0,updatedAt:now},
     $setOnInsert:{createdAt:now}},
@@ -158,14 +158,14 @@ bot.command("channels",async ctx=>{
 });
 bot.command("forwards",async ctx=>{
  if(!ctx.from||!admins.has(ctx.from.id)){await ctx.reply("ဤ Command ကို Admin သာ အသုံးပြုနိုင်ပါသည်။");return;}
- const routes=await db.collection("auto_forward_routes").find({enabled:true}).sort({sourceChannelId:1}).toArray();
+ const routes=await db.collection<any>("auto_forward_routes").find({enabled:true}).sort({sourceChannelId:1}).toArray();
  await ctx.reply(routes.length?("အသုံးပြုနေသော Auto-forward Routes:\n"+routes.map(r=>"• "+String(r.animeTitle??"Anime")+" | "+String(r.sourceChannelId)+" → "+String(r.targetChannelId)).join("\n")):"Auto-forward Route မရှိသေးပါ။");
 });
 bot.command("stopforward",async ctx=>{
  if(!ctx.from||!admins.has(ctx.from.id)){await ctx.reply("ဤ Command ကို Admin သာ အသုံးပြုနိုင်ပါသည်။");return;}
  const sourceChannelId=(ctx.match??"").trim();
  if(!/^(-100[0-9]+)$/.test(sourceChannelId)){await ctx.reply("အသုံးပြုပုံ: /stopforward -1002484587849");return;}
- const result=await db.collection("auto_forward_routes").updateOne(
+ const result=await db.collection<any>("auto_forward_routes").updateOne(
   {_id:sourceChannelId,enabled:true},
   {$set:{enabled:false,updatedAt:new Date(),stoppedAt:new Date()}}
  );
