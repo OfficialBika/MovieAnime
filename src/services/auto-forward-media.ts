@@ -45,12 +45,12 @@ export async function processAutoForwardMedia(input: {
   caption: string;
   mediaType: HelperMediaType;
 }): Promise<AutoForwardMediaResult> {
-  const route = await input.db.collection<AutoForwardRoute>("auto_forward_routes")
+  const route = await input.db.collection<any>("auto_forward_routes")
     .findOne({ _id: input.sourceChannelId, enabled: true });
   if (!route) return { status: "route_not_found" };
 
   const submissionId = input.sourceChannelId + ":" + String(input.originalMessageId);
-  const submissions = input.db.collection<Document>("auto_forward_submissions");
+  const submissions = input.db.collection<any>("auto_forward_submissions");
   const existing = await submissions.findOne({ _id: submissionId });
   if (existing && existing.status !== "failed") return { status: "duplicate" };
 
@@ -90,7 +90,7 @@ export async function processAutoForwardMedia(input: {
   if (!metadata) {
     const reason = !episodeNumber ? "episode_number_not_found" : "resolution_not_found";
     const normalizedTitle = input.caption.trim();
-    await input.db.collection<Document>("helper_review_items").updateOne(
+    await input.db.collection<any>("helper_review_items").updateOne(
       { _id: "auto-forward:" + submissionId },
       {
         $set: {
@@ -129,7 +129,7 @@ export async function processAutoForwardMedia(input: {
     copiedMessageId = copied.message_id;
     const writtenAt = new Date();
 
-    await input.db.collection<Document>("anime_channels").updateOne(
+    await input.db.collection<any>("anime_channels").updateOne(
       { telegramChannelId: route.targetChannelId },
       {
         $set: { enabled: true, updatedAt: writtenAt },
@@ -143,13 +143,13 @@ export async function processAutoForwardMedia(input: {
       },
       { upsert: true }
     );
-    const channel = await input.db.collection<Document>("anime_channels").findOne({
+    const channel = await input.db.collection<any>("anime_channels").findOne({
       telegramChannelId: route.targetChannelId
     });
     const animeId = String(channel?._id ?? route.targetChannelId);
     episodeId = animeId + ":" + String(metadata.episodeNumber);
 
-    await input.db.collection<Document>("episodes").updateOne(
+    await input.db.collection<any>("episodes").updateOne(
       { _id: episodeId },
       {
         $setOnInsert: {
@@ -162,7 +162,7 @@ export async function processAutoForwardMedia(input: {
       },
       { upsert: true }
     );
-    await input.db.collection<Document>("media_versions").updateOne(
+    await input.db.collection<any>("media_versions").updateOne(
       { sourceChannelId: route.targetChannelId, sourceMessageId: copiedMessageId },
       {
         $set: {
@@ -211,13 +211,13 @@ export async function processAutoForwardMedia(input: {
     if (copiedMessageId !== undefined) {
       try {
         await input.api.deleteMessage(route.targetChannelId, copiedMessageId);
-        await input.db.collection<Document>("media_versions").deleteOne({
+        await input.db.collection<any>("media_versions").deleteOne({
           sourceChannelId: route.targetChannelId,
           sourceMessageId: copiedMessageId
         });
         if (episodeId) {
-          const remaining = await input.db.collection<Document>("media_versions").findOne({ episodeId });
-          if (!remaining) await input.db.collection<Document>("episodes").deleteOne({ _id: episodeId });
+          const remaining = await input.db.collection<any>("media_versions").findOne({ episodeId });
+          if (!remaining) await input.db.collection<any>("episodes").deleteOne({ _id: episodeId });
         }
       } catch (rollbackError) {
         logger.error("Auto-forward rollback failed", {
