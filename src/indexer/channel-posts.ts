@@ -6,18 +6,13 @@ import { logger } from "../shared/logger.js";
 export async function indexChannelPost(ctx: Context, db: Db): Promise<void> {
   const post = ctx.channelPost ?? ctx.editedChannelPost;
   if (!post) return;
-
   const channelId = String(post.chat.id);
   const messageId = post.message_id;
-  const registered = await db.collection("anime_channels").findOne({
-    telegramChannelId: channelId,
-    enabled: true
-  });
+  const registered = await db.collection("anime_channels").findOne({ telegramChannelId: channelId, enabled: true });
   if (!registered) return;
 
   const video = post.video;
   const document = post.document;
-  const hasMedia = Boolean(video || document);
   const mediaType = video ? "video" : document ? "document" : undefined;
   const caption = "caption" in post ? post.caption : undefined;
   const text = caption ?? ("text" in post ? post.text : "") ?? "";
@@ -25,11 +20,10 @@ export async function indexChannelPost(ctx: Context, db: Db): Promise<void> {
     channelId,
     messageId,
     text,
-    hasMedia,
+    hasMedia: Boolean(video || document),
     ...(mediaType ? { mediaType } : {}),
     date: new Date(post.date * 1000)
   });
-
   if (parsed.status === "skip") {
     logger.debug("Channel post skipped", { channelId, messageId, reason: parsed.reason });
     return;
@@ -42,8 +36,7 @@ export async function indexChannelPost(ctx: Context, db: Db): Promise<void> {
     );
     return;
   }
-
-  const animeId = registered._id as string;
+  const animeId = String(registered._id);
   const episodeId = `${animeId}:${parsed.value.episodeNumber}`;
   await db.collection("episodes").updateOne(
     { _id: episodeId },
@@ -53,7 +46,6 @@ export async function indexChannelPost(ctx: Context, db: Db): Promise<void> {
   await db.collection("media_versions").updateOne(
     { sourceChannelId: channelId, sourceMessageId: messageId },
     { $set: {
-      _id: `${channelId}:${messageId}`,
       episodeId,
       resolution: parsed.value.resolution ?? "UNKNOWN",
       sourceChannelId: channelId,
