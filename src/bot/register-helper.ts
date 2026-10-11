@@ -179,6 +179,29 @@ export function registerHelperSystem(bot: Bot, db: Db, admins: ReadonlySet<numbe
     await ctx.reply("Route ကို ပိတ်ပြီးပါပြီ။ သိမ်းထားသော Episode/Media record များကို မဖျက်ထားပါ။");
   });
 
+  bot.command("helperreviews", async (ctx) => {
+    if (!(await requireAdmin(ctx, admins))) return;
+    const reviews = await db.collection<Document>("helper_review_items")
+      .find({ status: "pending" })
+      .sort({ updatedAt: -1 })
+      .limit(10)
+      .toArray();
+    if (!reviews.length) {
+      await ctx.reply("Pending Helper Review မရှိပါ။");
+      return;
+    }
+    const lines = reviews.map((item, index) => {
+      const title = String(item.normalizedTitle ?? item.caption ?? "(caption မရှိ)")
+        .replace(/\\s+/g, " ")
+        .slice(0, 120);
+      return String(index + 1) + ". " + title +
+        "\\nReason: " + String(item.reason ?? "unknown") +
+        "\\nHelper ID: " + String(item.userId ?? "unknown") +
+        "\\nMessage ID: " + String(item.sourceMessageId ?? "unknown");
+    });
+    await ctx.reply("Pending Helper Review (နောက်ဆုံး " + String(reviews.length) + " ခု)\\n\\n" + lines.join("\\n\\n"));
+  });
+
   bot.command("helperguide", async (ctx) => {
     await ctx.reply(
       "Helper Video ပို့နည်း:\n" +
