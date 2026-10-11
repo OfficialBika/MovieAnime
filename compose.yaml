@@ -1,0 +1,45 @@
+services:
+  anime-bot:
+    build: .
+    env_file: .env
+    restart: unless-stopped
+    command: ["node", "dist/bot/index.js"]
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    stop_grace_period: 20s
+
+  anime-importer:
+    build: .
+    env_file: .env
+    restart: "no"
+    profiles: ["import"]
+    command: ["node", "dist/importer/index.js"]
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  anime-delete-worker:
+    build: .
+    env_file: .env
+    restart: unless-stopped
+    command: ["node", "dist/workers/delete-entry.js"]
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: bika_anime
+    volumes:
+      - anime_mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  anime_mongodb_data:
